@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crypto Practice Trader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{--accent:#2563EB;--ink:#17202A;--muted:#5B6573;--body:#3B4552;--line:#E6E9EE;--bg:#F5F6F8;--up:#15803D;--down:#B42318}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--ink)}
+.wrap{max-width:1200px;margin:0 auto;padding:32px 20px 64px;display:flex;flex-direction:column;gap:24px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px}
+h1{margin:0;font-size:28px;font-weight:700;letter-spacing:-.01em}
+h2{margin:0;font-size:20px;font-weight:600}
+.sub{margin:6px 0 0;font-size:15px;color:var(--muted)}
+.hright{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:#FFF7E6;color:#8A4B00;font-size:14px;font-weight:600}
+.small{font-size:14px;color:var(--muted)}
+.tiny{font-size:13px;color:var(--muted)}
+.btn{height:44px;padding:0 18px;border-radius:10px;border:1px solid #D5D9E0;background:#fff;color:var(--ink);font:600 14px Inter,system-ui,sans-serif;cursor:pointer}
+.btn:hover{background:#F7F8FA}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(.95)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.card{background:#fff;border-radius:14px;border:1px solid var(--line);padding:20px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.kpi{display:flex;flex-direction:column;gap:8px}
+.kpi .v{font-size:30px;font-weight:700}
+.kpi .v small{font-size:15px;font-weight:500;color:var(--muted)}
+.up{color:var(--up)}.down{color:var(--down)}
+.sechead{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.coin{display:flex;flex-direction:column;gap:14px;cursor:pointer;border-width:2px;border-color:transparent;outline:1px solid var(--line)}
+.coin.sel{border-color:var(--accent);outline-color:transparent}
+.coin .top{display:flex;justify-content:space-between;align-items:center}
+.coin .sym{font-size:17px;font-weight:700}
+.coin .price{font-size:24px;font-weight:700}
+.coin p{margin:0;font-size:14px;line-height:1.5;color:var(--body)}
+.coin .row{display:flex;gap:10px}
+.coin .row .btn{flex:1}
+.coin .hold{font-size:13px;color:var(--muted)}
+.pill{padding:6px 12px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap}
+.pill.BUY{background:#DCFCE7;color:#166534}.pill.HOLD{background:#EEF0F3;color:#374151}.pill.SELL{background:#FEF3C7;color:#92400E}
+.seg{display:flex;gap:4px;padding:4px;background:#EEF0F3;border-radius:12px;flex-wrap:wrap}
+.seg button{height:40px;padding:0 14px;border-radius:9px;border:none;background:transparent;color:#374151;font:600 14px Inter,system-ui,sans-serif;cursor:pointer}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.fcbox{background:#F7F8FA;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:6px}
+.fcbox .r{font-size:18px;font-weight:700}
+.conf{font-size:13px;font-weight:600}
+.split{display:flex;flex-wrap:wrap;gap:24px}
+.split>.main{flex:999 1 560px;min-width:0}
+.split>.side{flex:1 1 320px;min-width:0}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:680px}
+th{text-align:left;color:var(--muted);font-weight:600;padding:10px 8px;border-bottom:1px solid var(--line)}
+td{padding:12px 8px;border-bottom:1px solid #F0F2F5;vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+.bar{height:10px;border-radius:999px;background:#EEF0F3;overflow:hidden}
+.bar>div{height:10px;background:var(--accent);border-radius:999px}
+.accrow{display:flex;flex-direction:column;gap:6px}
+.accrow .l{display:flex;justify-content:space-between;font-size:14px;gap:8px}
+.note{background:#F7F8FA;border-radius:12px;padding:14px;font-size:13px;line-height:1.5;color:var(--body)}
+.banner{padding:12px 16px;border-radius:12px;background:#FEE4E2;color:#7A271A;font-size:14px;display:none}
+.empty{padding:24px 8px;text-align:center;color:var(--muted);font-size:14px}
+.overlay{position:fixed;inset:0;background:rgba(17,24,39,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:24px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px}
+.modal label{font-size:14px;font-weight:600}
+.modal input{height:48px;border-radius:10px;border:1px solid #C9CED6;padding:0 14px;font:500 17px Inter,system-ui,sans-serif;width:100%}
+.quick{display:flex;gap:8px;flex-wrap:wrap}
+.quick .btn{height:40px;padding:0 14px}
+.preview{background:#F7F8FA;border-radius:12px;padding:14px;font-size:14px;line-height:1.6;color:var(--body)}
+.err{color:var(--down);font-size:14px;min-height:20px}
+.foot{display:flex;flex-wrap:wrap;gap:10px}
+.gloss{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));font-size:14px;line-height:1.5;color:var(--body)}
+.gloss b{color:var(--ink)}
+svg text{font-family:Inter,system-ui,sans-serif}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Crypto Practice Trader</h1>
+    <p class="sub">Practise buying and selling with virtual money. Prices are live from Binance, trades are not real.</p>
+  </div>
+  <div class="hright">
+    <span class="badge">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      Simulation only, no real money
+    </span>
+    <span class="small" id="updated">Loading prices…</span>
+    <button class="btn" id="refresh" type="button">Refresh prices</button>
+  </div>
+</header>
+
+<div class="banner" id="banner" role="alert"></div>
+
+<section aria-label="Portfolio summary" class="grid" id="kpis"></section>
+
+<section aria-labelledby="coins-h">
+  <div class="sechead">
+    <h2 id="coins-h">Your coins</h2>
+    <span class="small">Prices in USDT (1 USDT ≈ 1 US dollar). Tap a coin to see its forecast.</span>
+  </div>
+  <div class="grid" id="coins"></div>
+</section>
+
+<section aria-labelledby="fc-h" class="card" style="display:flex;flex-direction:column;gap:20px;padding:24px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div>
+      <h2 id="fc-h">Where the price might go</h2>
+      <p class="small" style="margin:4px 0 0">Solid line is recent prices. Shaded area is where the price will probably land (8 times out of 10). The further out, the wider and less certain it gets.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Forecast period" id="hz">
+      <button type="button" data-h="7">Next 7 days</button>
+      <button type="button" data-h="30">Next 30 days</button>
+      <button type="button" data-h="90">Next 3 months</button>
+    </div>
+  </div>
+  <div id="chart"></div>
+  <div class="grid" id="fcboxes"></div>
+</section>
+
+<div class="split">
+  <section aria-labelledby="tr-h" class="card main" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <h2 id="tr-h">My practice trades</h2>
+      <button class="btn" type="button" id="csv">Download report (CSV)</button>
+    </div>
+    <div class="scroll" id="trades"></div>
+  </section>
+
+  <section aria-labelledby="acc-h" class="card side" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+    <h2 id="acc-h">Is the advice any good?</h2>
+    <p class="small" style="margin:0;line-height:1.5;color:var(--body)">Each Buy or Sell call is checked against what the price really did afterwards. A Buy is right if the price went up, a Sell is right if it went down. Hold calls aren't scored.</p>
+    <div id="acc"></div>
+    <div class="note">A coin toss gets about 50%. If these scores sit near 50%, the advice is no better than guessing. Treat it as a learning aid, not a crystal ball.</div>
+  </section>
+</div>
+
+<section class="card" aria-labelledby="g-h" style="padding:24px;display:flex;flex-direction:column;gap:14px">
+  <h2 id="g-h">What the labels mean</h2>
+  <div class="gloss">
+    <div><b>BUY</b>: the price looks low compared with its recent average and has started to recover.</div>
+    <div><b>HOLD</b>: no strong signal. Doing nothing is a valid choice.</div>
+    <div><b>SELL</b>: the price has risen fast or sits well above its recent average. A drop often follows.</div>
+    <div><b>Fee</b>: each practice trade costs 0.1%, the same as a standard Binance spot trade.</div>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="d-h" style="padding:24px;display:flex;flex-direction:column;gap:14px">
+  <h2 id="d-h">Your data</h2>
+  <p class="small" style="margin:0;line-height:1.5">Trades are saved in this browser only. To move them to another device, save a backup here and load it there.</p>
+  <div class="foot">
+    <button class="btn" type="button" id="export">Save backup</button>
+    <button class="btn" type="button" id="importBtn">Load backup</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+    <button class="btn" type="button" id="reset">Start again with 5,000 USDT</button>
+  </div>
+  <div class="tiny" id="datamsg"></div>
+</section>
+
+<p class="tiny" style="text-align:center;margin:0">Live market data from Binance. This is a learning tool, not financial advice.</p>
+</div>
+
+<div class="overlay" id="ov" role="dialog" aria-modal="true" aria-labelledby="m-h">
+  <div class="modal">
+    <h2 id="m-h">Practice buy</h2>
+    <div class="small" id="m-info"></div>
+    <div>
+      <label for="m-amt" id="m-lab">Amount to spend (USDT)</label>
+      <input id="m-amt" type="number" inputmode="decimal" min="0" step="any" style="margin-top:8px">
+    </div>
+    <div class="quick" id="m-quick"></div>
+    <div class="preview" id="m-prev"></div>
+    <div class="err" id="m-err"></div>
+    <div class="foot" style="justify-content:flex-end">
+      <button class="btn" type="button" id="m-cancel">Cancel</button>
+      <button class="btn primary" type="button" id="m-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ov2" role="dialog" aria-modal="true" aria-labelledby="c-h">
+  <div class="modal">
+    <h2 id="c-h">Start again?</h2>
+    <p class="small" style="margin:0;line-height:1.5">This clears all practice trades and resets your balance to 5,000 USDT. Your advice history is kept. Save a backup first if you want to keep your trades.</p>
+    <div class="foot" style="justify-content:flex-end">
+      <button class="btn" type="button" id="c-cancel">Cancel</button>
+      <button class="btn primary" type="button" id="c-ok">Yes, start again</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+const START = 5000;
+const FEE = 0.001;
+const KEY = 'cpt-state-v1';
+const COINS = [
+  {sym:'BTC', name:'Bitcoin', pair:'BTCUSDT', dp:2, qdp:6},
+  {sym:'XRP', name:'XRP', pair:'XRPUSDT', dp:4, qdp:2},
+  {sym:'MANA', name:'Decentraland', pair:'MANAUSDT', dp:4, qdp:2},
+  {sym:'ADA', name:'Cardano', pair:'ADAUSDT', dp:4, qdp:2}
+];
+const HZ = [7, 30, 90];
+const HOLD_BAND = {7:0.05, 30:0.10, 90:0.15};
+const BASES = ['https://data-api.binance.vision', 'https://api.binance.com'];
+
+// ---------- storage ----------
+function fresh(){ return {start:START, cash:START, hold:{}, cost:{}, trades:[], recs:[]}; }
+function load(){
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (valid(s)) return s; } catch(e){}
+  return fresh();
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+function valid(s){
+  return s && typeof s.cash === 'number' && isFinite(s.cash) && s.hold && s.cost &&
+    Array.isArray(s.trades) && Array.isArray(s.recs);
+}
+let S = load();
+
+// ---------- market data ----------
+const M = {}; // sym -> {price, chg, days:[{t, c}], closes:[]}
+let selected = 'BTC', horizon = 30, lastOk = null;
+
+async function api(path){
+  let lastErr;
+  for (const b of BASES){
+    try {
+      const r = await fetch(b + path, {cache:'no-store'});
+      if (r.ok) return await r.json();
+      lastErr = new Error('HTTP ' + r.status);
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr;
+}
+async function loadHistory(){
+  await Promise.all(COINS.map(async c => {
+    const k = await api('/api/v3/klines?symbol=' + c.pair + '&interval=1d&limit=400');
+    const days = k.map(x => ({t:x[0], c:parseFloat(x[4])}));
+    M[c.sym] = Object.assign(M[c.sym] || {}, {days});
+  }));
+}
+async function loadTickers(){
+  const syms = encodeURIComponent(JSON.stringify(COINS.map(c => c.pair)));
+  const t = await api('/api/v3/ticker/24hr?symbols=' + syms);
+  t.forEach(x => {
+    const c = COINS.find(c => c.pair === x.symbol);
+    if (!c) return;
+    const m = M[c.sym] || (M[c.sym] = {days:[]});
+    m.price = parseFloat(x.lastPrice);
+    m.chg = parseFloat(x.priceChangePercent);
+    if (m.days.length) m.days[m.days.length - 1].c = m.price; // today's candle follows live price
+  });
+  COINS.forEach(c => { const m = M[c.sym]; if (m && m.days) m.closes = m.days.map(d => d.c); });
+}
+
+// ---------- indicators ----------
+function sma(a, n, i){ if (i < n - 1) return NaN; let s = 0; for (let k = i - n + 1; k <= i; k++) s += a[k]; return s / n; }
+function rsi(a, n, i){
+  if (i < n) return NaN;
+  let g = 0, l = 0;
+  for (let k = i - n + 1; k <= i; k++){ const d = a[k] - a[k-1]; if (d > 0) g += d; else l -= d; }
+  if (l === 0) return 100;
+  return 100 - 100 / (1 + g / l);
+}
+function pct(x){ return Math.abs(x * 100).toFixed(0) + '%'; }
+function signalAt(a, i){
+  if (i < 90) return null;
+  const p = a[i], s30 = sma(a, 30, i), s90 = sma(a, 90, i), r = rsi(a, 14, i);
+  const vs30 = p / s30 - 1, vs90 = p / s90 - 1;
+  const turning = p > a[i-3];
+  if (r < 30) return {s:'BUY', why:'Price has dropped fast in the last two weeks and looks oversold. A bounce often follows a slide like this.'};
+  if (vs90 < -0.10 && turning) return {s:'BUY', why:'Price is ' + pct(vs90) + ' below its 3-month average and has started to turn up. Could be a good time to buy a small amount.'};
+  if (r > 72) return {s:'SELL', why:'Price has climbed fast in the last two weeks and looks overheated. A pullback often follows a run like this.'};
+  if (vs30 > 0.12) return {s:'SELL', why:'Price is ' + pct(vs30) + ' above its 1-month average. Taking some profit is a sensible move.'};
+  const dir = vs30 >= 0 ? 'above' : 'below';
+  return {s:'HOLD', why:'Price is ' + pct(vs30) + ' ' + dir + ' its 1-month average. No strong signal either way, so waiting is the safer move.'};
+}
+function judge(sig, change, h){
+  if (sig === 'BUY') return change > 0;
+  if (sig === 'SELL') return change < 0;
+  return Math.abs(change) <= HOLD_BAND[h];
+}
+
+// Past-year test: run the same rules on each past day and check the result h days later
+function backtest(){
+  const out = {}; HZ.forEach(h => out[h] = {ok:0, n:0});
+  COINS.forEach(c => {
+    const a = (M[c.sym] || {}).closes; if (!a) return;
+    const last = a.length - 1;
+    for (let i = 90; i < last; i++){
+      const sg = signalAt(a, i); if (!sg || sg.s === 'HOLD') continue;
+      HZ.forEach(h => { if (i + h <= last - 1) { out[h].n++; if (judge(sg.s, a[i+h] / a[i] - 1, h)) out[h].ok++; } });
+    }
+  });
+  return out;
+}
+
+// Live record: log one call per coin per day, check later against Binance daily closes
+function dayKey(t){ return new Date(t).toISOString().slice(0, 10); }
+function logRecs(){
+  const today = dayKey(Date.now());
+  COINS.forEach(c => {
+    const m = M[c.sym]; if (!m || !m.closes || !m.closes.length) return;
+    if (S.recs.some(r => r.coin === c.sym && r.day === today)) return;
+    const sg = signalAt(m.closes, m.closes.length - 1); if (!sg) return;
+    S.recs.push({day:today, coin:c.sym, s:sg.s, price:m.price});
+  });
+  save();
+}
+function liveRecord(){
+  const out = {}; HZ.forEach(h => out[h] = {ok:0, n:0, wait:0});
+  S.recs.forEach(r => {
+    if (r.s === 'HOLD') return;
+    const m = M[r.coin]; if (!m || !m.days) return;
+    HZ.forEach(h => {
+      const target = dayKey(Date.parse(r.day) + h * 864e5);
+      const d = m.days.find(x => dayKey(x.t) === target);
+      const isToday = target === dayKey(Date.now());
+      if (!d || isToday) { out[h].wait++; return; }
+      out[h].n++; if (judge(r.s, d.c / r.price - 1, h)) out[h].ok++;
+    });
+  });
+  return out;
+}
+
+// ---------- forecast ----------
+function forecast(a, t){
+  const n = Math.min(90, a.length - 1), rets = [];
+  for (let k = a.length - n; k < a.length; k++) rets.push(Math.log(a[k] / a[k-1]));
+  const mu = rets.reduce((s, x) => s + x, 0) / rets.length;
+  const sd = Math.sqrt(rets.reduce((s, x) => s + (x - mu) * (x - mu), 0) / (rets.length - 1));
+  const drift = Math.max(-0.003, Math.min(0.003, mu * 0.5)); // damped recent trend
+  const p = a[a.length - 1], z = 1.2816; // 80% range
+  return {
+    mid: p * Math.exp(drift * t),
+    lo: p * Math.exp(drift * t - z * sd * Math.sqrt(t)),
+    hi: p * Math.exp(drift * t + z * sd * Math.sqrt(t))
+  };
+}
+function confidence(f){
+  const w = f.hi / f.lo - 1;
+  if (w < 0.15) return {t:'Fairly reliable', c:'#166534'};
+  if (w < 0.40) return {t:'Rough guide only', c:'#92400E'};
+  return {t:'Very uncertain', c:'#B42318'};
+}
+
+// ---------- portfolio ----------
+function coinOf(sym){ return COINS.find(c => c.sym === sym); }
+function value(){
+  let held = 0;
+  COINS.forEach(c => { const q = S.hold[c.sym] || 0; if (q && M[c.sym] && M[c.sym].price) held += q * M[c.sym].price; });
+  return {held, total: S.cash + held};
+}
+function currentSignal(sym){
+  const a = (M[sym] || {}).closes; if (!a || !a.length) return null;
+  return signalAt(a, a.length - 1);
+}
+function doBuy(sym, usdt){
+  const p = M[sym].price, fee = usdt * FEE, qty = (usdt - fee) / p;
+  S.cash -= usdt;
+  S.hold[sym] = (S.hold[sym] || 0) + qty;
+  S.cost[sym] = (S.cost[sym] || 0) + usdt;
+  const sg = currentSignal(sym);
+  S.trades.push({id:Date.now(), ts:Date.now(), coin:sym, side:'BUY', qty, price:p, usdt, fee, advice: sg ? sg.s : null});
+  save();
+}
+function doSell(sym, qty){
+  const p = M[sym].price, have = S.hold[sym] || 0;
+  qty = Math.min(qty, have);
+  const gross = qty * p, fee = gross * FEE, net = gross - fee;
+  const costOut = have > 0 ? (S.cost[sym] || 0) * (qty / have) : 0;
+  S.cash += net;
+  S.hold[sym] = have - qty;
+  S.cost[sym] = (S.cost[sym] || 0) - costOut;
+  if (S.hold[sym] < 1e-12) { S.hold[sym] = 0; S.cost[sym] = 0; }
+  const sg = currentSignal(sym);
+  S.trades.push({id:Date.now(), ts:Date.now(), coin:sym, side:'SELL', qty, price:p, usdt:net, fee, realised: net - costOut, advice: sg ? sg.s : null});
+  save();
+}
+
+// ---------- formatting ----------
+function fmt(n, dp){ if (!isFinite(n)) return '–'; return n.toLocaleString('en-AU', {minimumFractionDigits:dp, maximumFractionDigits:dp}); }
+function signed(n, dp){ return (n >= 0 ? '+' : '−') + fmt(Math.abs(n), dp); }
+function arrow(n){ return n >= 0 ? '▲' : '▼'; }
+function cls(n){ return n >= 0 ? 'up' : 'down'; }
+function sigFigs(p){ return p >= 1000 ? 0 : p >= 10 ? 2 : 4; }
+function dateStr(t){ return new Date(t).toLocaleDateString('en-AU', {day:'2-digit', month:'short'}); }
+function $(id){ return document.getElementById(id); }
+
+// ---------- render ----------
+function renderKpis(){
+  const v = value(), gain = v.total - S.start, gp = gain / S.start * 100;
+  const bt = backtest()[7], acc = bt.n ? Math.round(bt.ok / bt.n * 100) : null;
+  $('kpis').innerHTML =
+    '<div class="card kpi"><span class="small">Total value now</span><span class="v">' + fmt(v.total, 2) + ' <small>USDT</small></span><span class="small">Started with ' + fmt(S.start, 2) + ' USDT</span></div>' +
+    '<div class="card kpi"><span class="small">Gain or loss so far</span><span class="v ' + cls(gain) + '">' + arrow(gain) + ' ' + signed(gain, 2) + '</span><span class="small ' + cls(gain) + '" style="font-weight:600">' + signed(gp, 2) + '% since you started</span></div>' +
+    '<div class="card kpi"><span class="small">Cash available to trade</span><span class="v">' + fmt(S.cash, 2) + '</span><span class="small">' + fmt(v.held, 2) + ' USDT held in coins</span></div>' +
+    '<div class="card kpi"><span class="small">How often 7-day advice was right</span><span class="v" style="color:var(--accent)">' + (acc === null ? '–' : acc + '%') + '</span><span class="small">' + (bt.n ? 'Tested on ' + fmt(bt.n, 0) + ' past-year Buy/Sell calls' : 'Waiting for price history') + '</span></div>';
+}
+
+function renderCoins(){
+  $('coins').innerHTML = COINS.map(c => {
+    const m = M[c.sym] || {}, sg = currentSignal(c.sym), q = S.hold[c.sym] || 0;
+    const price = m.price !== undefined ? fmt(m.price, c.dp) : '…';
+    const chg = m.chg !== undefined ? '<span class="small ' + cls(m.chg) + '" style="font-weight:600">' + arrow(m.chg) + ' ' + fmt(Math.abs(m.chg), 1) + '% in 24h</span>' : '';
+    const holdTxt = q > 0 ? 'You hold ' + fmt(q, c.qdp) + ' ' + c.sym + ' (' + fmt(q * (m.price || 0), 2) + ' USDT)' : 'You hold none yet';
+    return '<div class="card coin' + (selected === c.sym ? ' sel' : '') + '" data-sel="' + c.sym + '">' +
+      '<div class="top"><div><div class="sym">' + c.sym + '</div><div class="tiny">' + c.name + '</div></div>' +
+      (sg ? '<span class="pill ' + sg.s + '">' + sg.s + '</span>' : '') + '</div>' +
+      '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span class="price">' + price + '</span>' + chg + '</div>' +
+      '<p>' + (sg ? sg.why : 'Loading advice…') + '</p>' +
+      '<div class="hold">' + holdTxt + '</div>' +
+      '<div class="row"><button type="button" class="btn primary" data-buy="' + c.sym + '"' + (m.price ? '' : ' disabled') + '>Practice buy</button>' +
+      '<button type="button" class="btn" data-sell="' + c.sym + '"' + (q > 0 && m.price ? '' : ' disabled') + '>Practice sell</button></div></div>';
+  }).join('');
+}
+
+function renderForecast(){
+  document.querySelectorAll('#hz button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.h === horizon)));
+  const c = coinOf(selected), m = M[selected];
+  $('fc-h').textContent = c.name + ': where the price might go';
+  if (!m || !m.closes || m.closes.length < 100) { $('chart').innerHTML = '<div class="empty">Loading price history…</div>'; $('fcboxes').innerHTML = ''; return; }
+  const a = m.closes;
+  $('fcboxes').innerHTML = HZ.map(h => {
+    const f = forecast(a, h), cf = confidence(f), dp = sigFigs(a[a.length-1]);
+    const label = h === 7 ? 'Next 7 days' : h === 30 ? 'Next 30 days' : 'Next 3 months';
+    return '<div class="fcbox"' + (h === horizon ? ' style="outline:2px solid var(--accent)"' : '') + '><span class="tiny">' + label + '</span>' +
+      '<span class="r">' + fmt(f.lo, dp) + ' to ' + fmt(f.hi, dp) + '</span>' +
+      '<span class="tiny">Middle estimate ' + fmt(f.mid, dp) + '</span>' +
+      '<span class="conf" style="color:' + cf.c + '">' + cf.t + '</span></div>';
+  }).join('');
+  $('chart').innerHTML = chartSvg(m.days, a, horizon);
+}
+
+function chartSvg(days, a, h){
+  const W = 860, H = 300, L = 70, R = 840, T = 30, B = 250;
+  const histN = h === 7 ? 30 : h === 30 ? 90 : 180;
+  const hist = a.slice(-histN), lastT = days[days.length - 1].t;
+  const fc = []; for (let t = 0; t <= h; t++) fc.push(forecast(a, t));
+  const all = hist.concat(fc.map(f => f.lo), fc.map(f => f.hi));
+  let lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const span = histN - 1 + h;
+  const x = i => L + (R - L) * i / span;
+  const y = v => B - (B - T) * (v - lo) / (hi - lo);
+  const dp = sigFigs(a[a.length - 1]);
+  let g = '';
+  for (let k = 0; k <= 3; k++){
+    const v = lo + (hi - lo) * k / 3, yy = y(v);
+    g += '<line x1="' + L + '" y1="' + yy + '" x2="' + R + '" y2="' + yy + '" stroke="' + (k === 0 ? '#D5D9E0' : '#EEF0F3') + '"></line>' +
+      '<text x="' + (L - 10) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="12" fill="#5B6573">' + fmt(v, dp) + '</text>';
+  }
+  const x0 = histN - 1;
+  const band = fc.map((f, t) => x(x0 + t) + ',' + y(f.hi)).concat(fc.slice().reverse().map((f, t) => x(x0 + h - t) + ',' + y(f.lo))).join(' ');
+  const line = hist.map((v, i) => x(i) + ',' + y(v)).join(' ');
+  const mid = fc.map((f, t) => x(x0 + t) + ',' + y(f.mid)).join(' ');
+  const tx = x(x0), ty = y(a[a.length - 1]);
+  const startT = lastT - (histN - 1) * 864e5, endT = lastT + h * 864e5;
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Recent prices and the likely range ahead" style="display:block;max-height:340px">' + g +
+    '<polygon points="' + band + '" fill="var(--accent)" fill-opacity="0.13"></polygon>' +
+    '<polyline points="' + line + '" fill="none" stroke="#17202A" stroke-width="2.2" stroke-linejoin="round"></polyline>' +
+    '<polyline points="' + mid + '" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-dasharray="6 6"></polyline>' +
+    '<line x1="' + tx + '" y1="' + (T - 6) + '" x2="' + tx + '" y2="' + B + '" stroke="#9AA3AF" stroke-dasharray="3 4"></line>' +
+    '<circle cx="' + tx + '" cy="' + ty + '" r="5" fill="#17202A"></circle>' +
+    '<text x="' + tx + '" y="' + (T - 12) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#17202A">Today</text>' +
+    '<text x="' + L + '" y="' + (B + 24) + '" font-size="12" fill="#5B6573">' + dateStr(startT) + '</text>' +
+    '<text x="' + tx + '" y="' + (B + 24) + '" text-anchor="middle" font-size="12" fill="#5B6573">' + dateStr(lastT) + '</text>' +
+    '<text x="' + R + '" y="' + (B + 24) + '" text-anchor="end" font-size="12" fill="#5B6573">' + dateStr(endT) + '</text></svg>';
+}
+
+function renderTrades(){
+  if (!S.trades.length){ $('trades').innerHTML = '<div class="empty">No practice trades yet. Pick a coin above and tap Practice buy.</div>'; return; }
+  const rows = S.trades.slice().reverse().map(t => {
+    const c = coinOf(t.coin), now = (M[t.coin] || {}).price;
+    let gl, call;
+    if (t.side === 'BUY'){
+      const g = now ? (t.qty * now - t.usdt) : NaN;
+      gl = isFinite(g) ? '<span class="' + cls(g) + '" style="font-weight:600">' + signed(g, 2) + '</span><div class="tiny">if sold now</div>' : '–';
+      call = !now ? '–' : now === t.price ? '<span class="tiny">No change yet</span>' : (now > t.price ? '<span class="up" style="font-weight:600">✓ Good call so far</span>' : '<span class="down" style="font-weight:600">✗ Price is lower now</span>');
+    } else {
+      gl = '<span class="' + cls(t.realised) + '" style="font-weight:600">' + signed(t.realised, 2) + '</span><div class="tiny">locked in</div>';
+      call = !now ? '–' : now === t.price ? '<span class="tiny">No change yet</span>' : (now < t.price ? '<span class="up" style="font-weight:600">✓ Sold before a drop</span>' : '<span class="down" style="font-weight:600">✗ Price rose after</span>');
+    }
+    return '<tr><td>' + dateStr(t.ts) + '</td><td><strong>' + (t.side === 'BUY' ? 'Bought' : 'Sold') + '</strong> ' + fmt(t.qty, c.qdp) + ' ' + t.coin + '</td>' +
+      '<td class="num">' + fmt(t.price, c.dp) + '</td><td class="num">' + fmt(t.usdt, 2) + '</td><td class="num">' + gl + '</td>' +
+      '<td>' + (t.advice ? '<span class="pill ' + t.advice + '">' + t.advice + '</span>' : '–') + '</td><td>' + call + '</td></tr>';
+  }).join('');
+  const realised = S.trades.filter(t => t.side === 'SELL').reduce((s, t) => s + t.realised, 0);
+  const fees = S.trades.reduce((s, t) => s + t.fee, 0);
+  $('trades').innerHTML = '<table><thead><tr><th>Date</th><th>Trade</th><th class="num">Price</th><th class="num">USDT</th><th class="num">Gain / loss</th><th>Advice then</th><th>Your decision</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<p class="small" style="margin:12px 0 0">Locked-in gains from sales: <strong class="' + cls(realised) + '">' + signed(realised, 2) + ' USDT</strong>. Fees paid: ' + fmt(fees, 2) + ' USDT.</p>';
+}
+
+function renderAcc(){
+  const bt = backtest(), lv = liveRecord();
+  const lab = {7:'7-day calls', 30:'30-day calls', 90:'3-month calls'};
+  const row = (h, r, isLive) => {
+    if (!r.n) return '<div class="accrow"><div class="l"><span>' + lab[h] + '</span><span class="tiny">' + (isLive ? (r.wait ? r.wait + ' waiting to be checked' : 'None yet') : 'Not enough data') + '</span></div><div class="bar"></div></div>';
+    const p = Math.round(r.ok / r.n * 100);
+    return '<div class="accrow"><div class="l"><span>' + lab[h] + '</span><span style="font-weight:600">' + fmt(r.ok, 0) + ' of ' + fmt(r.n, 0) + ' right (' + p + '%)</span></div><div class="bar"><div style="width:' + p + '%"></div></div>' +
+      (isLive && r.wait ? '<span class="tiny">' + r.wait + ' more waiting to be checked</span>' : '') + '</div>';
+  };
+  $('acc').innerHTML =
+    '<div style="display:flex;flex-direction:column;gap:14px"><strong style="font-size:15px">Tested on the past year</strong>' + HZ.map(h => row(h, bt[h], false)).join('') + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:14px;margin-top:22px"><strong style="font-size:15px">Your live record</strong><span class="tiny" style="margin-top:-8px">Each day you open the page, any Buy or Sell call is saved, then checked when the time is up.</span>' + HZ.map(h => row(h, lv[h], true)).join('') + '</div>';
+}
+
+function renderAll(){ renderKpis(); renderCoins(); renderForecast(); renderTrades(); renderAcc(); }
+
+// ---------- trade dialog ----------
+let mode = null, msym = null;
+function openTrade(side, sym){
+  mode = side; msym = sym;
+  const c = coinOf(sym), m = M[sym], q = S.hold[sym] || 0, sg = currentSignal(sym);
+  $('m-h').textContent = (side === 'BUY' ? 'Practice buy: ' : 'Practice sell: ') + c.name;
+  $('m-info').innerHTML = 'Live price ' + fmt(m.price, c.dp) + ' USDT' + (sg ? ' · Advice now: <span class="pill ' + sg.s + '">' + sg.s + '</span>' : '');
+  $('m-lab').textContent = side === 'BUY' ? 'Amount to spend (USDT)' : 'Amount of ' + sym + ' to sell';
+  const qs = side === 'BUY'
+    ? [[100,'100'],[250,'250'],[500,'500'],[1000,'1,000'],[Math.floor(S.cash * 100) / 100,'All cash']]
+    : [[q * 0.25,'25%'],[q * 0.5,'50%'],[q,'All']];
+  $('m-quick').innerHTML = qs.map(x => '<button type="button" class="btn" data-q="' + x[0] + '">' + x[1] + '</button>').join('');
+  $('m-amt').value = '';
+  $('m-amt').step = 'any';
+  $('m-err').textContent = '';
+  updatePreview();
+  $('ov').classList.add('open');
+  setTimeout(() => $('m-amt').focus(), 30);
+}
+function closeTrade(){ $('ov').classList.remove('open'); mode = null; }
+function updatePreview(){
+  const c = coinOf(msym), p = M[msym].price, v = parseFloat($('m-amt').value);
+  if (!(v > 0)) { $('m-prev').textContent = mode === 'BUY' ? 'You have ' + fmt(S.cash, 2) + ' USDT to spend.' : 'You hold ' + fmt(S.hold[msym] || 0, c.qdp) + ' ' + msym + '.'; return; }
+  if (mode === 'BUY'){
+    const fee = v * FEE;
+    $('m-prev').innerHTML = 'You get about <strong>' + fmt((v - fee) / p, c.qdp) + ' ' + msym + '</strong><br>Fee: ' + fmt(fee, 2) + ' USDT · Cash left: ' + fmt(S.cash - v, 2) + ' USDT';
+  } else {
+    const gross = v * p, fee = gross * FEE;
+    $('m-prev').innerHTML = 'You receive about <strong>' + fmt(gross - fee, 2) + ' USDT</strong><br>Fee: ' + fmt(fee, 2) + ' USDT';
+  }
+}
+function confirmTrade(){
+  const v = parseFloat($('m-amt').value);
+  if (!(v > 0)) { $('m-err').textContent = 'Enter an amount above zero.'; return; }
+  if (mode === 'BUY'){
+    if (v > S.cash + 1e-9) { $('m-err').textContent = 'That is more than your cash (' + fmt(S.cash, 2) + ' USDT).'; return; }
+    if (v < 1) { $('m-err').textContent = 'Minimum trade is 1 USDT.'; return; }
+    doBuy(msym, Math.min(v, S.cash));
+  } else {
+    const have = S.hold[msym] || 0;
+    if (v > have * (1 + 1e-9)) { $('m-err').textContent = 'You only hold ' + fmt(have, coinOf(msym).qdp) + ' ' + msym + '.'; return; }
+    doSell(msym, Math.min(v, have));
+  }
+  closeTrade(); renderAll();
+}
+
+// ---------- report and backup ----------
+function csvCell(x){ const s = String(x); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function download(name, text, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function exportCsv(){
+  const v = value(), bt = backtest(), lv = liveRecord();
+  const L = [['Crypto Practice Trader report', new Date().toLocaleString('en-AU')], [],
+    ['Starting balance (USDT)', S.start.toFixed(2)], ['Total value now (USDT)', v.total.toFixed(2)],
+    ['Gain or loss (USDT)', (v.total - S.start).toFixed(2)], ['Gain or loss (%)', ((v.total - S.start) / S.start * 100).toFixed(2)],
+    ['Cash (USDT)', S.cash.toFixed(2)], ['Held in coins (USDT)', v.held.toFixed(2)], []];
+  L.push(['Advice accuracy', 'Past-year test', 'Your live record']);
+  HZ.forEach(h => L.push([h + '-day calls', bt[h].n ? bt[h].ok + '/' + bt[h].n + ' (' + Math.round(bt[h].ok / bt[h].n * 100) + '%)' : 'n/a', lv[h].n ? lv[h].ok + '/' + lv[h].n + ' (' + Math.round(lv[h].ok / lv[h].n * 100) + '%)' : 'n/a']));
+  L.push([], ['Date', 'Coin', 'Action', 'Quantity', 'Price (USDT)', 'Value (USDT)', 'Fee (USDT)', 'Gain/loss (USDT)', 'Advice at the time']);
+  S.trades.forEach(t => {
+    const now = (M[t.coin] || {}).price;
+    const g = t.side === 'SELL' ? t.realised : (now ? t.qty * now - t.usdt : '');
+    L.push([new Date(t.ts).toLocaleString('en-AU'), t.coin, t.side === 'BUY' ? 'Buy' : 'Sell', t.qty, t.price, t.usdt.toFixed(2), t.fee.toFixed(2), g === '' ? '' : (+g).toFixed(2) + (t.side === 'BUY' ? ' (if sold now)' : ''), t.advice || '']);
+  });
+  download('crypto-practice-report-' + dayKey(Date.now()) + '.csv', L.map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv');
+}
+
+// ---------- refresh ----------
+async function refresh(full){
+  $('refresh').disabled = true;
+  try {
+    if (full || !M.BTC || !M.BTC.days) await loadHistory();
+    await loadTickers();
+    lastOk = Date.now();
+    $('banner').style.display = 'none';
+    logRecs();
+  } catch(e){
+    $('banner').textContent = "Couldn't reach Binance just now. Check your internet connection; it will try again in a minute. (Binance's price feed is not available in some countries, such as the USA.)";
+    $('banner').style.display = 'block';
+  }
+  $('refresh').disabled = false;
+  stamp(); renderAll();
+}
+function stamp(){
+  if (!lastOk) { $('updated').textContent = 'Waiting for prices…'; return; }
+  const s = Math.round((Date.now() - lastOk) / 1000);
+  $('updated').textContent = 'Prices updated ' + (s < 60 ? 'just now' : Math.round(s / 60) + ' min ago');
+}
+
+// ---------- events ----------
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-buy],[data-sell]');
+  if (b){ e.stopPropagation(); openTrade(b.dataset.buy ? 'BUY' : 'SELL', b.dataset.buy || b.dataset.sell); return; }
+  const card = e.target.closest('[data-sel]');
+  if (card){ selected = card.dataset.sel; renderCoins(); renderForecast(); return; }
+  const q = e.target.closest('[data-q]');
+  if (q){ const v = parseFloat(q.dataset.q); $('m-amt').value = mode === 'BUY' ? v.toFixed(2) : String(+v.toPrecision(10)); updatePreview(); }
+});
+$('hz').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ horizon = +b.dataset.h; renderForecast(); } });
+$('m-amt').addEventListener('input', updatePreview);
+$('m-amt').addEventListener('keydown', e => { if (e.key === 'Enter') confirmTrade(); });
+$('m-ok').addEventListener('click', confirmTrade);
+$('m-cancel').addEventListener('click', closeTrade);
+$('ov').addEventListener('click', e => { if (e.target === $('ov')) closeTrade(); });
+$('refresh').addEventListener('click', () => refresh(true));
+$('csv').addEventListener('click', exportCsv);
+$('export').addEventListener('click', () => { download('crypto-practice-backup-' + dayKey(Date.now()) + '.json', JSON.stringify(S, null, 2), 'application/json'); $('datamsg').textContent = 'Backup saved to your downloads.'; });
+$('importBtn').addEventListener('click', () => $('importFile').click());
+$('importFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const s = JSON.parse(await f.text());
+    if (!valid(s)) throw new Error('bad');
+    S = s; save(); renderAll(); $('datamsg').textContent = 'Backup loaded: ' + S.trades.length + ' trades.';
+  } catch(err){ $('datamsg').textContent = "That file isn't a valid backup from this tool."; }
+  e.target.value = '';
+});
+$('reset').addEventListener('click', () => $('ov2').classList.add('open'));
+$('c-cancel').addEventListener('click', () => $('ov2').classList.remove('open'));
+$('c-ok').addEventListener('click', () => {
+  const recs = S.recs; S = fresh(); S.recs = recs; save();
+  $('ov2').classList.remove('open'); renderAll(); $('datamsg').textContent = 'Started again with 5,000 USDT.';
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape'){ closeTrade(); $('ov2').classList.remove('open'); } });
+
+renderAll();
+refresh(true);
+setInterval(() => refresh(false), 60000);       // live prices every minute
+setInterval(() => refresh(true), 30 * 60000);   // daily history every 30 minutes
+setInterval(stamp, 15000);
+
+// test hook (harmless in the browser)
+window.__cpt = {signalAt, judge, forecast, backtest, doBuy, doSell, value, get S(){ return S; }, M};
+})();
+</script>
+</body>
+</html>
