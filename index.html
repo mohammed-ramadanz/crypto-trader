@@ -112,7 +112,7 @@ svg text{font-family:Inter,system-ui,sans-serif}
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
     <div>
       <h2 id="fc-h">Where the price might go</h2>
-      <p class="small" style="margin:4px 0 0">Starts from today. The shaded area is where the price will probably land (8 times out of 10), and the dashed line is the middle estimate. Point at or tap the chart to see any date.</p>
+      <p class="small" style="margin:4px 0 0">Starts from today. The line is the average estimate. The darker band is the most likely range (half the time the price lands here), the lighter band is the low-to-high range (8 times out of 10). Point at or tap any day to see its prices.</p>
     </div>
     <div class="seg" role="group" aria-label="Forecast period" id="hz">
       <button type="button" data-h="7">Next 7 days</button>
@@ -243,7 +243,7 @@ async function api(path){
 }
 async function loadHistory(){
   await Promise.all(COINS.map(async c => {
-    const k = await api('/api/v3/klines?symbol=' + c.pair + '&interval=1d&limit=400');
+    const k = await api('/api/v3/klines?symbol=' + c.pair + '&interval=1d&limit=1000');
     const days = k.map(x => ({t:x[0], c:parseFloat(x[4])}));
     M[c.sym] = Object.assign(M[c.sym] || {}, {days});
   }));
@@ -296,7 +296,7 @@ function backtest(){
   COINS.forEach(c => {
     const a = (M[c.sym] || {}).closes; if (!a) return;
     const last = a.length - 1;
-    for (let i = 90; i < last; i++){
+    for (let i = Math.max(90, last - 365); i < last; i++){
       const sg = signalAt(a, i); if (!sg || sg.s === 'HOLD') continue;
       HZ.forEach(h => { if (i + h <= last - 1) { out[h].n++; if (judge(sg.s, a[i+h] / a[i] - 1, h)) out[h].ok++; } });
     }
@@ -333,24 +333,54 @@ function liveRecord(){
 }
 
 // ---------- forecast ----------
-function forecast(a, t){
-  const n = Math.min(90, a.length - 1), rets = [];
-  for (let k = a.length - n; k < a.length; k++) rets.push(Math.log(a[k] / a[k-1]));
-  const mu = rets.reduce((s, x) => s + x, 0) / rets.length;
-  const sd = Math.sqrt(rets.reduce((s, x) => s + (x - mu) * (x - mu), 0) / (rets.length - 1));
-  const drift = Math.max(-0.003, Math.min(0.003, mu * 0.5)); // damped recent trend
-  const p = a[a.length - 1], z = 1.2816; // 80% range
-  return {
-    mid: p * Math.exp(drift * t),
-    lo: p * Math.exp(drift * t - z * sd * Math.sqrt(t)),
-    hi: p * Math.exp(drift * t + z * sd * Math.sqrt(t))
-  };
+// Model: recent trend that fades over time, a pull back towards the 3-month average,
+// and volatility that drifts from its current level towards its long-run level.
+function slope(a, i, w){
+  const n = Math.min(w, i + 1); let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  for (let k = 0; k < n; k++){ const x = k, yv = Math.log(a[i - n + 1 + k]); sx += x; sy += yv; sxy += x * yv; sxx += x * x; }
+  return (n * sxy - sx * sy) / (n * sxx - sx * sx);
 }
+function params(a, i){
+  const N = Math.min(180, i), rets = [];
+  for (let k = i - N + 1; k <= i; k++) rets.push(Math.log(a[k] / a[k-1]));
+  const mu = rets.reduce((s, r) => s + r, 0) / rets.length;
+  const vL = rets.reduce((s, r) => s + (r - mu) * (r - mu), 0) / (rets.length - 1);
+  let vN = vL; rets.forEach(r => { vN = 0.94 * vN + 0.06 * r * r; });
+  return {p:a[i], vL, vN, s30:slope(a, i, 30), s90:slope(a, i, 90), gap:Math.log(a[i] / sma(a, 90, i))};
+}
+function model(P, t){
+  if (t <= 0) return {mid:P.p, lo:P.p, hi:P.p, lo50:P.p, hi50:P.p};
+  let v = P.vL * t + (P.vN - P.vL) * 20 * (1 - Math.exp(-t / 20));
+  if (!(v > 0)) v = P.vL * t * 0.25;
+  const sd = Math.sqrt(v);
+  let m = P.s30 * 10 * (1 - Math.exp(-t / 10)) + 0.5 * P.s90 * 45 * (1 - Math.exp(-t / 45)) - 0.5 * P.gap * (1 - Math.exp(-t / 60));
+  m = Math.max(-0.75 * sd, Math.min(0.75 * sd, m));
+  const e = z => P.p * Math.exp(m + z * sd);
+  return {mid:e(0), lo:e(-1.2816), hi:e(1.2816), lo50:e(-0.6745), hi50:e(0.6745)};
+}
+function forecast(a, t){ return model(params(a, a.length - 1), t); }
 function confidence(f){
   const w = f.hi / f.lo - 1;
   if (w < 0.15) return {t:'Fairly reliable', c:'#166534'};
   if (w < 0.40) return {t:'Rough guide only', c:'#92400E'};
   return {t:'Very uncertain', c:'#B42318'};
+}
+// Past-year check of the forecast itself, per coin and horizon
+const FCHK = {};
+function forecastCheck(sym){
+  const a = (M[sym] || {}).closes; if (!a || a.length < 200) return null;
+  const key = sym + a.length; if (FCHK[key]) return FCHK[key];
+  const last = a.length - 2, out = {};
+  HZ.forEach(h => {
+    let n = 0, in80 = 0, in50 = 0, eM = 0, eN = 0;
+    for (let i = Math.max(180, last - 365); i + h <= last; i += 2){
+      const f = model(params(a, i), h), act = a[i + h];
+      n++; if (act >= f.lo && act <= f.hi) in80++; if (act >= f.lo50 && act <= f.hi50) in50++;
+      eM += Math.abs(act / f.mid - 1); eN += Math.abs(act / a[i] - 1);
+    }
+    out[h] = n ? {n, in80:in80 / n, in50:in50 / n, beat: eM < eN, err:eM / n} : null;
+  });
+  return (FCHK[key] = out);
 }
 
 // ---------- portfolio ----------
@@ -430,13 +460,20 @@ function renderForecast(){
   $('fc-h').textContent = c.name + ': where the price might go';
   if (!m || !m.closes || m.closes.length < 100) { $('chart').innerHTML = '<div class="empty">Loading price history…</div>'; $('fcboxes').innerHTML = ''; return; }
   const a = m.closes;
+  const chk = forecastCheck(selected) || {};
   $('fcboxes').innerHTML = HZ.map(h => {
-    const f = forecast(a, h), cf = confidence(f), dp = sigFigs(a[a.length-1]);
+    const f = forecast(a, h), cf = confidence(f), dp = sigFigs(a[a.length-1]), now = a[a.length-1];
     const label = h === 7 ? 'Next 7 days' : h === 30 ? 'Next 30 days' : 'Next 3 months';
-    return '<div class="fcbox"' + (h === horizon ? ' style="outline:2px solid var(--accent)"' : '') + '><span class="tiny">' + label + '</span>' +
-      '<span class="r">' + fmt(f.lo, dp) + ' to ' + fmt(f.hi, dp) + '</span>' +
-      '<span class="tiny">Middle estimate ' + fmt(f.mid, dp) + '</span>' +
-      '<span class="conf" style="color:' + cf.c + '">' + cf.t + '</span></div>';
+    const ch = f.mid / now - 1, k = chk[h];
+    return '<div class="fcbox"' + (h === horizon ? ' style="outline:2px solid var(--accent)"' : '') + '>' +
+      '<span class="tiny">' + label + ' (to ' + dateStr(m.days[m.days.length-1].t + h * 864e5) + ')</span>' +
+      '<span class="tiny" style="margin-top:4px">Average estimate</span>' +
+      '<span class="r">' + fmt(f.mid, dp) + ' <span class="small ' + cls(ch) + '" style="font-weight:600">' + arrow(ch) + ' ' + fmt(Math.abs(ch * 100), 1) + '%</span></span>' +
+      '<span class="small" style="color:var(--body)">Most likely: <strong>' + fmt(f.lo50, dp) + ' to ' + fmt(f.hi50, dp) + '</strong></span>' +
+      '<span class="small" style="color:var(--body)">Low to high: ' + fmt(f.lo, dp) + ' to ' + fmt(f.hi, dp) + '</span>' +
+      '<span class="conf" style="color:' + cf.c + '">' + cf.t + '</span>' +
+      (k ? '<span class="tiny">Past-year check: the real price landed in the low-to-high range ' + Math.round(k.in80 * 100) + '% of the time, and in the most-likely range ' + Math.round(k.in50 * 100) + '%.</span>' : '') +
+      '</div>';
   }).join('');
   $('chart').innerHTML = chartSvg(m.days, a, horizon);
 }
@@ -448,7 +485,7 @@ function chartSvg(days, a, h){
   const hist = a.slice(-histN), lastT = days[days.length - 1].t;
   const fc = []; for (let t = 0; t <= h; t++) fc.push(forecast(a, t));
   const pts = hist.map((v, i) => ({t:lastT - (histN - 1 - i) * 864e5, past:true, price:v, today:i === histN - 1}));
-  for (let t = 1; t <= h; t++) pts.push({t:lastT + t * 864e5, past:false, lo:fc[t].lo, hi:fc[t].hi, mid:fc[t].mid});
+  for (let t = 1; t <= h; t++) pts.push({t:lastT + t * 864e5, past:false, lo:fc[t].lo, hi:fc[t].hi, mid:fc[t].mid, lo50:fc[t].lo50, hi50:fc[t].hi50});
   const all = hist.concat(fc.map(f => f.lo), fc.map(f => f.hi));
   let lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
   const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
@@ -471,14 +508,16 @@ function chartSvg(days, a, h){
     g += '<text x="' + x(i) + '" y="' + (B + 24) + '" text-anchor="' + anchor + '" font-size="12" fill="#5B6573">' + dateStr(pts[i].t) + '</text>';
   }
   if (showPast) g += '<text x="' + x(x0) + '" y="' + (B + 24) + '" text-anchor="middle" font-size="12" fill="#5B6573">' + dateStr(lastT) + '</text>';
-  const band = fc.map((f, t) => x(x0 + t) + ',' + y(f.hi)).concat(fc.slice().reverse().map((f, t) => x(x0 + h - t) + ',' + y(f.lo))).join(' ');
+  const poly = (hk, lk) => fc.map((f, t) => x(x0 + t) + ',' + y(f[hk])).concat(fc.slice().reverse().map((f, t) => x(x0 + h - t) + ',' + y(f[lk]))).join(' ');
+  const band = poly('hi', 'lo'), band50 = poly('hi50', 'lo50');
   const line = hist.map((v, i) => x(i) + ',' + y(v)).join(' ');
   const mid = fc.map((f, t) => x(x0 + t) + ',' + y(f.mid)).join(' ');
   const tx = x(x0), ty = y(a[a.length - 1]);
   return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Likely price range ahead. Point at the chart to see the date and price." style="display:block;max-height:340px;touch-action:pan-y">' + g +
-    '<polygon points="' + band + '" fill="var(--accent)" fill-opacity="0.13"></polygon>' +
+    '<polygon points="' + band + '" fill="var(--accent)" fill-opacity="0.10"></polygon>' +
+    '<polygon points="' + band50 + '" fill="var(--accent)" fill-opacity="0.20"></polygon>' +
     (histN > 1 ? '<polyline points="' + line + '" fill="none" stroke="#17202A" stroke-width="2.2" stroke-linejoin="round"></polyline>' : '') +
-    '<polyline points="' + mid + '" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-dasharray="6 6"></polyline>' +
+    '<polyline points="' + mid + '" fill="none" stroke="var(--accent)" stroke-width="2.5"></polyline>' +
     '<line x1="' + tx + '" y1="' + (T - 6) + '" x2="' + tx + '" y2="' + B + '" stroke="#9AA3AF" stroke-dasharray="3 4"></line>' +
     '<circle cx="' + tx + '" cy="' + ty + '" r="5" fill="#17202A"></circle>' +
     '<text x="' + tx + '" y="' + (T - 12) + '" text-anchor="' + (histN > 1 ? 'middle' : 'start') + '" font-size="12" font-weight="600" fill="#17202A">Today</text>' +
@@ -500,7 +539,7 @@ function showTip(e){
   hd.setAttribute('cx', cx); hd.setAttribute('cy', cy); hd.setAttribute('visibility', 'visible');
   tip.innerHTML = '<strong>' + longDate(p.t) + (p.today ? ' (today)' : '') + '</strong><br>' +
     (p.past ? (p.today ? 'Live price: ' : 'Price: ') + fmt(p.price, dp) + ' USDT'
-            : 'Likely between ' + fmt(p.lo, dp) + ' and ' + fmt(p.hi, dp) + '<br>Middle estimate: ' + fmt(p.mid, dp) + ' USDT');
+            : 'Average estimate: <strong>' + fmt(p.mid, dp) + ' USDT</strong><br>Most likely: ' + fmt(p.lo50, dp) + ' to ' + fmt(p.hi50, dp) + '<br>Low to high: ' + fmt(p.lo, dp) + ' to ' + fmt(p.hi, dp));
   tip.style.display = 'block';
   const px = cx / CH.W * r.width;
   if (px > r.width / 2) { tip.style.left = 'auto'; tip.style.right = (r.width - px + 12) + 'px'; }
@@ -654,9 +693,11 @@ document.addEventListener('click', e => {
   if (q){ const v = parseFloat(q.dataset.q); $('m-amt').value = mode === 'BUY' ? v.toFixed(2) : String(+v.toPrecision(10)); updatePreview(); }
 });
 $('past').addEventListener('change', e => { showPast = e.target.checked; renderForecast(); });
-$('chart').addEventListener('pointermove', showTip);
-$('chart').addEventListener('pointerdown', showTip);
-$('chart').addEventListener('pointerleave', hideTip);
+let pinned = false;
+$('chart').addEventListener('pointermove', e => { if (!pinned || e.pointerType === 'mouse') showTip(e); });
+$('chart').addEventListener('pointerdown', e => { pinned = true; showTip(e); });
+$('chart').addEventListener('pointerleave', () => { if (!pinned) hideTip(); });
+document.addEventListener('pointerdown', e => { if (!e.target.closest('#chart')) { pinned = false; hideTip(); } });
 $('hz').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ horizon = +b.dataset.h; renderForecast(); } });
 $('m-amt').addEventListener('input', updatePreview);
 $('m-amt').addEventListener('keydown', e => { if (e.key === 'Enter') confirmTrade(); });
