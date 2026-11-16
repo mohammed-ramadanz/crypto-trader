@@ -112,7 +112,7 @@ svg text{font-family:Inter,system-ui,sans-serif}
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
     <div>
       <h2 id="fc-h">Where the price might go</h2>
-      <p class="small" style="margin:4px 0 0">Solid line is recent prices. Shaded area is where the price will probably land (8 times out of 10). The further out, the wider and less certain it gets.</p>
+      <p class="small" style="margin:4px 0 0">Starts from today. The shaded area is where the price will probably land (8 times out of 10), and the dashed line is the middle estimate. Point at or tap the chart to see any date.</p>
     </div>
     <div class="seg" role="group" aria-label="Forecast period" id="hz">
       <button type="button" data-h="7">Next 7 days</button>
@@ -120,7 +120,8 @@ svg text{font-family:Inter,system-ui,sans-serif}
       <button type="button" data-h="90">Next 3 months</button>
     </div>
   </div>
-  <div id="chart"></div>
+  <div id="chart" style="position:relative"></div>
+  <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--body);cursor:pointer;min-height:44px"><input type="checkbox" id="past" style="width:20px;height:20px;accent-color:var(--accent)"> Also show past prices for comparison</label>
   <div class="grid" id="fcboxes"></div>
 </section>
 
@@ -227,7 +228,7 @@ let S = load();
 
 // ---------- market data ----------
 const M = {}; // sym -> {price, chg, days:[{t, c}], closes:[]}
-let selected = 'BTC', horizon = 30, lastOk = null;
+let selected = 'BTC', horizon = 30, lastOk = null, showPast = false;
 
 async function api(path){
   let lastErr;
@@ -440,18 +441,22 @@ function renderForecast(){
   $('chart').innerHTML = chartSvg(m.days, a, horizon);
 }
 
+let CH = null;
 function chartSvg(days, a, h){
   const W = 860, H = 300, L = 70, R = 840, T = 30, B = 250;
-  const histN = h === 7 ? 30 : h === 30 ? 90 : 180;
+  const histN = showPast ? (h === 7 ? 30 : h === 30 ? 90 : 180) : 1;
   const hist = a.slice(-histN), lastT = days[days.length - 1].t;
   const fc = []; for (let t = 0; t <= h; t++) fc.push(forecast(a, t));
+  const pts = hist.map((v, i) => ({t:lastT - (histN - 1 - i) * 864e5, past:true, price:v, today:i === histN - 1}));
+  for (let t = 1; t <= h; t++) pts.push({t:lastT + t * 864e5, past:false, lo:fc[t].lo, hi:fc[t].hi, mid:fc[t].mid});
   const all = hist.concat(fc.map(f => f.lo), fc.map(f => f.hi));
   let lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
   const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
-  const span = histN - 1 + h;
+  const span = pts.length - 1;
   const x = i => L + (R - L) * i / span;
   const y = v => B - (B - T) * (v - lo) / (hi - lo);
   const dp = sigFigs(a[a.length - 1]);
+  CH = {pts, x, y, L, R, T, B, W, span, dp};
   let g = '';
   for (let k = 0; k <= 3; k++){
     const v = lo + (hi - lo) * k / 3, yy = y(v);
@@ -459,21 +464,52 @@ function chartSvg(days, a, h){
       '<text x="' + (L - 10) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="12" fill="#5B6573">' + fmt(v, dp) + '</text>';
   }
   const x0 = histN - 1;
+  for (let k = 0; k <= 4; k++){
+    const i = Math.round(span * k / 4);
+    if (showPast && Math.abs(i - x0) < span / 10 && i !== x0) continue;
+    const anchor = k === 0 ? 'start' : k === 4 ? 'end' : 'middle';
+    g += '<text x="' + x(i) + '" y="' + (B + 24) + '" text-anchor="' + anchor + '" font-size="12" fill="#5B6573">' + dateStr(pts[i].t) + '</text>';
+  }
+  if (showPast) g += '<text x="' + x(x0) + '" y="' + (B + 24) + '" text-anchor="middle" font-size="12" fill="#5B6573">' + dateStr(lastT) + '</text>';
   const band = fc.map((f, t) => x(x0 + t) + ',' + y(f.hi)).concat(fc.slice().reverse().map((f, t) => x(x0 + h - t) + ',' + y(f.lo))).join(' ');
   const line = hist.map((v, i) => x(i) + ',' + y(v)).join(' ');
   const mid = fc.map((f, t) => x(x0 + t) + ',' + y(f.mid)).join(' ');
   const tx = x(x0), ty = y(a[a.length - 1]);
-  const startT = lastT - (histN - 1) * 864e5, endT = lastT + h * 864e5;
-  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Recent prices and the likely range ahead" style="display:block;max-height:340px">' + g +
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Likely price range ahead. Point at the chart to see the date and price." style="display:block;max-height:340px;touch-action:pan-y">' + g +
     '<polygon points="' + band + '" fill="var(--accent)" fill-opacity="0.13"></polygon>' +
-    '<polyline points="' + line + '" fill="none" stroke="#17202A" stroke-width="2.2" stroke-linejoin="round"></polyline>' +
+    (histN > 1 ? '<polyline points="' + line + '" fill="none" stroke="#17202A" stroke-width="2.2" stroke-linejoin="round"></polyline>' : '') +
     '<polyline points="' + mid + '" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-dasharray="6 6"></polyline>' +
     '<line x1="' + tx + '" y1="' + (T - 6) + '" x2="' + tx + '" y2="' + B + '" stroke="#9AA3AF" stroke-dasharray="3 4"></line>' +
     '<circle cx="' + tx + '" cy="' + ty + '" r="5" fill="#17202A"></circle>' +
-    '<text x="' + tx + '" y="' + (T - 12) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#17202A">Today</text>' +
-    '<text x="' + L + '" y="' + (B + 24) + '" font-size="12" fill="#5B6573">' + dateStr(startT) + '</text>' +
-    '<text x="' + tx + '" y="' + (B + 24) + '" text-anchor="middle" font-size="12" fill="#5B6573">' + dateStr(lastT) + '</text>' +
-    '<text x="' + R + '" y="' + (B + 24) + '" text-anchor="end" font-size="12" fill="#5B6573">' + dateStr(endT) + '</text></svg>';
+    '<text x="' + tx + '" y="' + (T - 12) + '" text-anchor="' + (histN > 1 ? 'middle' : 'start') + '" font-size="12" font-weight="600" fill="#17202A">Today</text>' +
+    '<line id="hl" x1="0" y1="' + T + '" x2="0" y2="' + B + '" stroke="#17202A" stroke-width="1" visibility="hidden"></line>' +
+    '<circle id="hd" cx="0" cy="0" r="6" fill="#fff" stroke="var(--accent)" stroke-width="3" visibility="hidden"></circle>' +
+    '<rect id="hit" x="' + L + '" y="' + T + '" width="' + (R - L) + '" height="' + (B - T) + '" fill="transparent" style="cursor:crosshair"></rect></svg>' +
+    '<div id="tip" role="status" aria-live="polite" style="position:absolute;top:8px;display:none;background:#17202A;color:#fff;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;pointer-events:none;white-space:nowrap;z-index:2"></div>';
+}
+function longDate(t){ return new Date(t).toLocaleDateString('en-AU', {weekday:'short', day:'numeric', month:'short', year:'numeric'}); }
+function showTip(e){
+  const svg = $('chart').querySelector('svg'); if (!svg || !CH) return;
+  const r = svg.getBoundingClientRect();
+  const vx = (e.clientX - r.left) / r.width * CH.W;
+  if (vx < CH.L - 10 || vx > CH.R + 10) { hideTip(); return; }
+  const i = Math.max(0, Math.min(CH.span, Math.round((vx - CH.L) / (CH.R - CH.L) * CH.span)));
+  const p = CH.pts[i], cx = CH.x(i), cy = CH.y(p.past ? p.price : p.mid), dp = CH.dp;
+  const hl = svg.querySelector('#hl'), hd = svg.querySelector('#hd'), tip = $('tip');
+  hl.setAttribute('x1', cx); hl.setAttribute('x2', cx); hl.setAttribute('visibility', 'visible');
+  hd.setAttribute('cx', cx); hd.setAttribute('cy', cy); hd.setAttribute('visibility', 'visible');
+  tip.innerHTML = '<strong>' + longDate(p.t) + (p.today ? ' (today)' : '') + '</strong><br>' +
+    (p.past ? (p.today ? 'Live price: ' : 'Price: ') + fmt(p.price, dp) + ' USDT'
+            : 'Likely between ' + fmt(p.lo, dp) + ' and ' + fmt(p.hi, dp) + '<br>Middle estimate: ' + fmt(p.mid, dp) + ' USDT');
+  tip.style.display = 'block';
+  const px = cx / CH.W * r.width;
+  if (px > r.width / 2) { tip.style.left = 'auto'; tip.style.right = (r.width - px + 12) + 'px'; }
+  else { tip.style.right = 'auto'; tip.style.left = (px + 12) + 'px'; }
+}
+function hideTip(){
+  const svg = $('chart').querySelector('svg'); if (!svg) return;
+  ['#hl', '#hd'].forEach(id => { const el = svg.querySelector(id); if (el) el.setAttribute('visibility', 'hidden'); });
+  const tip = $('tip'); if (tip) tip.style.display = 'none';
 }
 
 function renderTrades(){
@@ -617,6 +653,10 @@ document.addEventListener('click', e => {
   const q = e.target.closest('[data-q]');
   if (q){ const v = parseFloat(q.dataset.q); $('m-amt').value = mode === 'BUY' ? v.toFixed(2) : String(+v.toPrecision(10)); updatePreview(); }
 });
+$('past').addEventListener('change', e => { showPast = e.target.checked; renderForecast(); });
+$('chart').addEventListener('pointermove', showTip);
+$('chart').addEventListener('pointerdown', showTip);
+$('chart').addEventListener('pointerleave', hideTip);
 $('hz').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ horizon = +b.dataset.h; renderForecast(); } });
 $('m-amt').addEventListener('input', updatePreview);
 $('m-amt').addEventListener('keydown', e => { if (e.key === 'Enter') confirmTrade(); });
